@@ -5,7 +5,7 @@ conn = psycopg2.connect(
 )
 cursor = conn.cursor()
 
-sql_authors ='''CREATE TABLE authors(
+sql_authors ='''CREATE TABLE IF NOT EXISTS authors(
    id int8 PRIMARY KEY,
    name varchar(255),
    username varchar(255),
@@ -16,18 +16,18 @@ sql_authors ='''CREATE TABLE authors(
    listed_count int4
 )'''
 
-sql_conversation_hashtags ='''CREATE TABLE conversation_hashtags(
+sql_conversation_hashtags ='''CREATE TABLE IF NOT EXISTS conversation_hashtags(
    id int8 PRIMARY KEY,
    conversation_id int8 NOT NULL,
    hashtag_id int8 NOT NULL
 )'''
 
-sql_hashtags ='''CREATE TABLE hashtags(
+sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
    id int8 PRIMARY KEY,
    tag text UNIQUE
 )'''
 
-sql_conversations ='''CREATE TABLE conversations(
+sql_conversations ='''CREATE TABLE IF NOT EXISTS conversations(
    id int8 PRIMARY KEY,
    author_id int8 NOT NULL,
    content text NOT NULL,
@@ -41,14 +41,14 @@ sql_conversations ='''CREATE TABLE conversations(
    created_at timestamp with time zone NOT NULL
 )'''
 
-sql_conversation_references ='''CREATE TABLE conversation_references(
+sql_conversation_references ='''CREATE TABLE IF NOT EXISTS conversation_references(
    id int8 PRIMARY KEY,
    conversation_id int8 NOT NULL,
    parent_id int8 NOT NULL,
    type varchar(20) NOT NULL
 )'''
 
-sql_links ='''CREATE TABLE links(
+sql_links ='''CREATE TABLE IF NOT EXISTS links(
    id int8 PRIMARY KEY,
    conversation_id int8 NOT NULL,
    url varchar(2048) NOT NULL,
@@ -56,7 +56,7 @@ sql_links ='''CREATE TABLE links(
    description text
 )'''
 
-sql_annotations ='''CREATE TABLE annotations(
+sql_annotations ='''CREATE TABLE IF NOT EXISTS annotations(
    id int8 PRIMARY KEY,
    conversation_id int8 NOT NULL,
    value text NOT NULL,
@@ -64,20 +64,20 @@ sql_annotations ='''CREATE TABLE annotations(
    probability numeric(4,3) NOT NULL
 )'''
 
-sql_context_annotations ='''CREATE TABLE context_annotations(
+sql_context_annotations ='''CREATE TABLE IF NOT EXISTS context_annotations(
    id int8 PRIMARY KEY,
    conversation_id int8 NOT NULL,
    context_domain_id int8 NOT NULL,
    context_entity_id int8 NOT NULL
 )'''
 
-sql_context_entities ='''CREATE TABLE context_entities(
+sql_context_entities ='''CREATE TABLE IF NOT EXISTS context_entities(
    id int8 PRIMARY KEY,
    name varchar(255) NOT NULL,
    description text
 )'''
 
-sql_context_domains ='''CREATE TABLE context_domains(
+sql_context_domains ='''CREATE TABLE IF NOT EXISTS context_domains(
    id int8 PRIMARY KEY,
    name varchar(255) NOT NULL,
    description text
