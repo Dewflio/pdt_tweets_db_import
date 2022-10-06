@@ -22,10 +22,7 @@ sql_conversation_hashtags ='''CREATE TABLE IF NOT EXISTS conversation_hashtags(
    hashtag_id int8 NOT NULL
 )'''
 
-sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
-   id int8 PRIMARY KEY,
-   tag text UNIQUE
-)'''
+
 
 sql_conversations ='''CREATE TABLE IF NOT EXISTS conversations(
    id int8 PRIMARY KEY,
@@ -49,7 +46,7 @@ sql_conversation_references ='''CREATE TABLE IF NOT EXISTS conversation_referenc
 )'''
 
 sql_links ='''CREATE TABLE IF NOT EXISTS links(
-   id int8 PRIMARY KEY,
+   id BIGSERIAL PRIMARY KEY,
    conversation_id int8 NOT NULL,
    url varchar(2048) NOT NULL,
    title text,
@@ -57,11 +54,16 @@ sql_links ='''CREATE TABLE IF NOT EXISTS links(
 )'''
 
 sql_annotations ='''CREATE TABLE IF NOT EXISTS annotations(
-   id int8 PRIMARY KEY,
+   id BIGSERIAL PRIMARY KEY,
    conversation_id int8 NOT NULL,
    value text NOT NULL,
    type text NOT NULL,
    probability numeric(4,3) NOT NULL
+)'''
+
+sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
+   id BIGSERIAL PRIMARY KEY,
+   tag text UNIQUE
 )'''
 
 sql_context_annotations ='''CREATE TABLE IF NOT EXISTS context_annotations(
