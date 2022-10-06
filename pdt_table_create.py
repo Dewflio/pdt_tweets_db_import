@@ -63,8 +63,9 @@ sql_annotations ='''CREATE TABLE IF NOT EXISTS annotations(
 
 sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
    id BIGSERIAL PRIMARY KEY,
-   tag text UNIQUE
+   tag text
 )'''
+#tmp got rid of UNIQUE in column tag 
 
 sql_context_annotations ='''CREATE TABLE IF NOT EXISTS context_annotations(
    id int8 PRIMARY KEY,

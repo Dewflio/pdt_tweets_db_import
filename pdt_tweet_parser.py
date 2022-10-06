@@ -18,6 +18,11 @@ start_time = time.time()
 start_time_str = time.strftime("%Y-%m-%dT%H-%M-%SZ",  time.localtime(start_time))
 out_dir = "out_data/"
 
+def write_to_file(filename, arr):
+    with open(filename, 'a', encoding='utf-8') as f:
+        writer = csv.writer(f, delimiter=';')
+        for time_stamp in arr:
+            writer.writerow(time_stamp)
 
 def get_time(block_start):
     current_date = time.time()
@@ -54,15 +59,12 @@ def parse_authors(conn, cursor):
     insert_vals = []
     block_start = time.time()
     time_arr = []
-
+    #TODO SANITIZE TEXT AT THE START
     with gzip.open("D:/PDT_zadanie_1/authors.jsonl.gz", 'r') as f:
         for line in f:
             data = json.loads(line)
             if authors_hashtable.get_val(data["id"]) == None:
                 authors_hashtable.set_val(data["id"], data["id"])
-            #authors_dict[data['id']] = None
-            #if authors_dict[data['id']] == None:
-            #    authors_dict[data['id']] = data['id']
 
                 authors_inserted_count += 1
                 authors_inserted_count_tmp += 1
@@ -178,26 +180,28 @@ def parse_conversations_first(conn, cursor):
     anno_time_arr = []
     anno_block_start = time.time()
 
+    time_reset_counter = 0
+
 
 
 
     with gzip.open("D:/PDT_zadanie_1/conversations.jsonl.gz", 'r') as f:
         for line in f:
+            line = line.decode('utf-8', errors='replace').replace('\x00', '\uFFFD')
             data = json.loads(line)
             if conversations_hashtable.get_val(data["id"]) == None:
                 conversations_hashtable.set_val(data["id"], data["id"])
 
-                #print("---------------------------------------------------------------------------------------")
-                #print(data)
+                time_reset_counter += 1
 
                 conv_inserted_count += 1
                 conv_inserted_count_tmp += 1
                 conv_insert_vals.append((data["id"], 
                     data["author_id"],
-                     data["text"].replace('\x00', '\uFFFD'),
+                     data["text"],
                       data["possibly_sensitive"],
-                       data["lang"].replace('\x00', '\uFFFD'),
-                        data["source"].replace('\x00', '\uFFFD'),
+                       data["lang"],
+                        data["source"],
                          data["public_metrics"]["retweet_count"],
                           data["public_metrics"]["reply_count"],
                           data["public_metrics"]["like_count"],
@@ -229,13 +233,14 @@ def parse_conversations_first(conn, cursor):
                     
                     if "hashtags" in data["entities"]:
                         for hasht in data["entities"]["hashtags"]:
-                            if hashtags_hashtable.get_val(hasht["tag"]) == None:
+                            if hashtags_hashtable.get_val(hasht["tag"]) == None and hasht["tag"] != "":
                                 hashtags_hashtable.set_val(hasht["tag"], hasht["tag"])
-
                                 hash_inserted_count += 1
                                 hash_inserted_count_tmp += 1
                                 hash_tuple = (hasht["tag"])
                                 hash_insert_vals.append(hash_tuple)
+                            
+                             
 
 
                 if conv_inserted_count_tmp >= 10000:
@@ -250,6 +255,13 @@ def parse_conversations_first(conn, cursor):
                 if hash_inserted_count_tmp >= 10000:
                     hash_inserted_count_tmp = 0
                     insert_hashtags(conn, cursor, 10000, hash_insert_vals)
+                    #try:
+                    #    insert_hashtags(conn, cursor, 15000, hash_insert_vals)
+                    #except Exception:
+                    #    with open("hash_debug.txt", 'w', encoding='utf-8') as f:
+                    #        for i in hash_insert_vals:
+                    #            f.write(i + "\n")
+
                     a,b,c = get_time(hash_block_start)
                     hash_time_arr.append((a,b,c))
                     hash_insert_vals = []
@@ -270,10 +282,28 @@ def parse_conversations_first(conn, cursor):
                     anno_time_arr.append((a,b,c))
                     anno_insert_vals = []
                     anno_block_start = time.time()
+                
+                if time_reset_counter >= 12000:
+                    if conv_time_arr != []:
+                        time_out_file = out_dir + "conversations-" + start_time_str + ".csv"
+                        write_to_file(time_out_file, conv_time_arr)
+                        conv_time_arr = []
+                    if anno_time_arr != []:
+                        time_out_file = out_dir + "annotations-" + start_time_str + ".csv"
+                        write_to_file(time_out_file, anno_time_arr)
+                        anno_time_arr = []
+                    if hash_time_arr != []:
+                        time_out_file = out_dir + "hashtags-" + start_time_str + ".csv"
+                        write_to_file(time_out_file, hash_time_arr)
+                        hash_time_arr = []
+                    if link_time_arr != []:
+                        time_out_file = out_dir + "links-" + start_time_str + ".csv"
+                        write_to_file(time_out_file, link_time_arr)
+                        link_time_arr
+                    time_reset_counter = 0
+                    print("zapisane")
 
-                          
- 
-            
+           
 
         if conv_insert_vals != []:
             insert_conversations(conn, cursor, conv_insert_vals, 10000, conv_block_start)
@@ -292,29 +322,19 @@ def parse_conversations_first(conn, cursor):
             a,b,c = get_time(hash_block_start)
             hash_time_arr.append((a,b,c))
 
-    time_out_file = out_dir + "conversations-" + start_time_str + ".csv"
-    with open(time_out_file, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=';')
-        for time_stamp in conv_time_arr:
-            writer.writerow(time_stamp)
-    
-    time_out_file = out_dir + "annotations-" + start_time_str + ".csv"
-    with open(time_out_file, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=';')
-        for time_stamp in anno_time_arr:
-            writer.writerow(time_stamp)
+    if conv_time_arr != []:
+        time_out_file = out_dir + "conversations-" + start_time_str + ".csv"
+        write_to_file(time_out_file, conv_time_arr)
+    if anno_time_arr != []:
+        time_out_file = out_dir + "annotations-" + start_time_str + ".csv"
+        write_to_file(time_out_file, anno_time_arr)
+    if hash_time_arr != []:
+        time_out_file = out_dir + "hashtags-" + start_time_str + ".csv"
+        write_to_file(time_out_file, hash_time_arr)
+    if link_time_arr != []:
+        time_out_file = out_dir + "links-" + start_time_str + ".csv"
+        write_to_file(time_out_file, link_time_arr)
 
-    time_out_file = out_dir + "hashtags-" + start_time_str + ".csv"
-    with open(time_out_file, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=';')
-        for time_stamp in hash_time_arr:
-            writer.writerow(time_stamp)
-
-    time_out_file = out_dir + "links-" + start_time_str + ".csv"
-    with open(time_out_file, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=';')
-        for time_stamp in link_time_arr:
-            writer.writerow(time_stamp)
             
     print("conversations parsed with count: " + str(conv_inserted_count))
     print("annotations parsed with count: " + str(anno_inserted_count))
