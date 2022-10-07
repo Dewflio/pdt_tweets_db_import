@@ -61,8 +61,9 @@ sql_annotations ='''CREATE TABLE IF NOT EXISTS annotations(
    probability numeric(4,3) NOT NULL
 )'''
 
+#got rid of BIGSERIAL for autoincrement - changing id to be the hash of the tag :)
 sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
-   id BIGSERIAL PRIMARY KEY,
+   id int8 PRIMARY KEY,
    tag text
 )'''
 #tmp got rid of UNIQUE in column tag 
