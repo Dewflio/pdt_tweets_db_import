@@ -39,8 +39,9 @@ sql_conversations ='''CREATE TABLE IF NOT EXISTS conversations(
    created_at timestamp with time zone NOT NULL
 )'''
 
+#changed int8 to BIGSERIAL to autoincrement
 sql_conversation_references ='''CREATE TABLE IF NOT EXISTS conversation_references(
-   id int8 PRIMARY KEY,
+   id BIGSERIAL PRIMARY KEY,
    conversation_id int8 NOT NULL,
    parent_id int8 NOT NULL,
    type varchar(20) NOT NULL

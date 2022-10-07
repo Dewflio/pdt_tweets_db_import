@@ -215,6 +215,16 @@ def insert_context_entities(conn, cursor, page_size, insert_vals):
         ) for item in insert_vals), page_size=page_size)
     conn.commit() 
 
+def insert_conversation_references(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO conversation_references(conversation_id, parent_id, type) VALUES %s;
+        """, ((
+            cref[0],
+            cref[1],
+            cref[2],      
+        ) for cref in insert_vals), page_size=page_size)
+    conn.commit() 
+
 def parse_conversations_first(conn, cursor):
     conv_inserted_count = 0
     conv_inserted_count_tmp = 0
@@ -231,6 +241,9 @@ def parse_conversations_first(conn, cursor):
     conv_hash_inserted_count = 0
     conv_hash_inserted_count_tmp = 0
 
+    conv_ref_inserted_count = 0
+    conv_ref_inserted_count_tmp = 0
+
     cont_anno_inserted_count = 0
     cont_anno_inserted_count_tmp = 0
     cont_domain_inserted_count = 0
@@ -239,6 +252,7 @@ def parse_conversations_first(conn, cursor):
     cont_entity_inserted_count_tmp = 0
 
     conv_insert_vals = []
+    conv_ref_insert_vals = []
     anno_insert_vals = []
     link_insert_vals = []
     hash_insert_vals = []
@@ -246,6 +260,7 @@ def parse_conversations_first(conn, cursor):
     cont_anno_insert_vals = []
     cont_domain_insert_vals = []
     cont_entity_insert_vals = []
+    
 
     conv_time_arr = []
     conv_block_start = time.time()
@@ -362,6 +377,12 @@ def parse_conversations_first(conn, cursor):
                                 cont_anno_inserted_count +=1
                                 cont_anno_inserted_count_tmp +=1
 
+                    if "referenced_tweets" in data:
+                        for ref_tweet in data["referenced_tweets"]:
+                            ref_tweet_tuple = (data["id"],ref_tweet["id"], ref_tweet["type"])
+                            conv_ref_insert_vals.append(ref_tweet_tuple)
+                            conv_ref_inserted_count +=1
+                            conv_ref_inserted_count_tmp +=1
   
 
                 #every BLOCK_SIZE number of entries in each category, the array of entries is inserted into their respective table
@@ -410,6 +431,10 @@ def parse_conversations_first(conn, cursor):
                     cont_entity_inserted_count_tmp = 0
                     insert_context_entities(conn=conn, cursor=cursor, page_size=1000, insert_vals=cont_entity_insert_vals)
                     cont_entity_insert_vals = []
+                if conv_ref_inserted_count_tmp >= BLOCKSIZE:
+                    conv_ref_inserted_count_tmp = 0
+                    insert_conversation_references(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_ref_insert_vals)
+                    conv_ref_insert_vals = []
                 
                 
                 #every 500,000 conversations, the time arrays are written into their respective files, and their arrays are reset
@@ -443,6 +468,8 @@ def parse_conversations_first(conn, cursor):
             insert_context_domains(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_domain_insert_vals)
         if cont_entity_insert_vals != []:
             insert_context_entities(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_entity_insert_vals)
+        if conv_ref_insert_vals != []:
+            insert_conversation_references(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_ref_insert_vals)
 
     #handles the remaining time stamp arrays
     if conv_time_arr != []:
@@ -458,6 +485,7 @@ def parse_conversations_first(conn, cursor):
     print("context_annotations parsed with count: " + str(cont_anno_inserted_count))
     print("context_domains parsed with count: " + str(cont_domain_inserted_count))
     print("context_entities parsed with count: " + str(cont_entity_inserted_count))
+    print("conversation_references parsed with count: " + str(conv_ref_inserted_count))
 
            
             
