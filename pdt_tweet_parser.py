@@ -9,9 +9,10 @@ conversations_dict = {}
 authors_hashtable = HashTable(1000000)
 
 conversations_hashtable = HashTable(1000000)
-#links_hashtable = HashTable(1000000)
-#annotations_hashtable = HashTable(1000000)
 hashtags_hashtable = HashTable(1000000)
+
+entities_hashtable = HashTable(1000000)
+domains_hashtable = HashTable(1000000)
 
 
 start_time = time.time()
@@ -151,6 +152,26 @@ def insert_hashtags(conn, cursor, page_size, insert_vals):
         ) for hasht in insert_vals), page_size=page_size)
     conn.commit() 
 
+def insert_context_domains(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO context_domains VALUES %s;
+        """, ((
+            item[0],
+            item[1],
+            item[2],
+        ) for item in insert_vals), page_size=page_size)
+    conn.commit()
+
+def insert_context_entities(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO context_entities VALUES %s;
+        """, ((
+            item[0],
+            item[1],
+            item[2],
+        ) for item in insert_vals), page_size=page_size)
+    conn.commit() 
+
 def parse_conversations_first(conn, cursor):
     conv_inserted_count = 0
     conv_inserted_count_tmp = 0
@@ -233,19 +254,18 @@ def parse_conversations_first(conn, cursor):
                     
                     if "hashtags" in data["entities"]:
                         for hasht in data["entities"]["hashtags"]:
-                            if hashtags_hashtable.get_val(hasht["tag"]) == None and hasht["tag"] != "":
+                            if hashtags_hashtable.get_val(hasht["tag"]) == None and hasht["tag"] == "":
                                 hashtags_hashtable.set_val(hasht["tag"], hasht["tag"])
                                 hash_inserted_count += 1
                                 hash_inserted_count_tmp += 1
                                 hash_tuple = (hasht["tag"])
                                 hash_insert_vals.append(hash_tuple)
-                            
-                             
+  
 
 
                 if conv_inserted_count_tmp >= 10000:
                     conv_inserted_count_tmp = 0
-                    insert_conversations(conn, cursor, 10000, conv_insert_vals)
+                    insert_conversations(conn=conn, cursor=cursor, page_size=10000, insert_vals=conv_insert_vals)
                     a,b,c = get_time(conv_block_start)
                     conv_time_arr.append((a,b,c))
                     print(conv_time_arr[-1])
@@ -254,14 +274,7 @@ def parse_conversations_first(conn, cursor):
                 
                 if hash_inserted_count_tmp >= 10000:
                     hash_inserted_count_tmp = 0
-                    insert_hashtags(conn, cursor, 10000, hash_insert_vals)
-                    #try:
-                    #    insert_hashtags(conn, cursor, 15000, hash_insert_vals)
-                    #except Exception:
-                    #    with open("hash_debug.txt", 'w', encoding='utf-8') as f:
-                    #        for i in hash_insert_vals:
-                    #            f.write(i + "\n")
-
+                    insert_hashtags(conn=conn, cursor=cursor, page_size=10000, insert_vals=hash_insert_vals)
                     a,b,c = get_time(hash_block_start)
                     hash_time_arr.append((a,b,c))
                     hash_insert_vals = []
@@ -269,7 +282,7 @@ def parse_conversations_first(conn, cursor):
                 
                 if link_inserted_count_tmp >= 10000:
                     link_inserted_count_tmp = 0
-                    insert_links(conn, cursor, 10000, link_insert_vals)
+                    insert_links(conn=conn, cursor=cursor, page_size=10000, insert_vals=link_insert_vals)
                     a,b,c = get_time(link_block_start)
                     link_time_arr.append((a,b,c))
                     link_insert_vals = []
@@ -277,13 +290,13 @@ def parse_conversations_first(conn, cursor):
                 
                 if anno_inserted_count_tmp >= 10000:
                     anno_inserted_count_tmp = 0
-                    insert_annotations(conn, cursor, 10000, anno_insert_vals)
+                    insert_annotations(conn=conn, cursor=cursor, page_size=10000, insert_vals=anno_insert_vals)
                     a,b,c = get_time(anno_block_start)
                     anno_time_arr.append((a,b,c))
                     anno_insert_vals = []
                     anno_block_start = time.time()
                 
-                if time_reset_counter >= 12000:
+                if time_reset_counter >= 500000:
                     if conv_time_arr != []:
                         time_out_file = out_dir + "conversations-" + start_time_str + ".csv"
                         write_to_file(time_out_file, conv_time_arr)
@@ -301,24 +314,24 @@ def parse_conversations_first(conn, cursor):
                         write_to_file(time_out_file, link_time_arr)
                         link_time_arr
                     time_reset_counter = 0
-                    print("zapisane")
+                    print("times written into csvs")
 
            
 
         if conv_insert_vals != []:
-            insert_conversations(conn, cursor, conv_insert_vals, 10000, conv_block_start)
+            insert_conversations(conn=conn, cursor=cursor, page_size=10000, insert_vals=conv_insert_vals)
             a,b,c = get_time(conv_block_start)
             conv_time_arr.append((a,b,c))
         if anno_insert_vals != []:
-            insert_annotations(conn, cursor, anno_insert_vals, 10000, anno_block_start)
+            insert_annotations(conn=conn, cursor=cursor, page_size=10000, insert_vals=anno_insert_vals)
             a,b,c = get_time(anno_block_start)
             anno_time_arr.append((a,b,c))
         if link_insert_vals != []:
-            insert_conversations(conn, cursor, link_insert_vals, 10000, link_block_start)
+            insert_conversations(conn=conn, cursor=cursor, page_size=10000, insert_vals=link_insert_vals)
             a,b,c = get_time(link_block_start)
             link_time_arr.append((a,b,c))
         if hash_insert_vals != []:
-            insert_conversations(conn, cursor, hash_insert_vals, 10000, hash_block_start)
+            insert_hashtags(conn=conn, cursor=cursor, page_size=10000, insert_vals=hash_insert_vals)
             a,b,c = get_time(hash_block_start)
             hash_time_arr.append((a,b,c))
 
