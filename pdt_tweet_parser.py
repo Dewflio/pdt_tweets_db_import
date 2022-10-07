@@ -22,7 +22,7 @@ start_time_str = time.strftime("%Y-%m-%dT%H-%M-%SZ",  time.localtime(start_time)
 out_dir = "out_data/"
 
 def write_to_file(filename, arr):
-    with open(filename, 'a', encoding='utf-8') as f:
+    with open(filename, 'a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f, delimiter=';')
         for time_stamp in arr:
             writer.writerow(time_stamp)
@@ -98,11 +98,8 @@ def parse_authors(conn, cursor):
             a,b,c = get_time(block_start)
             time_arr.append((a,b,c))
 
-    time_out_file = out_dir + "authors-" + start_time_str + ".csv"
-    with open(time_out_file, 'w', encoding='utf-8') as f:
-        writer = csv.writer(f, delimiter=';')
-        for time_stamp in time_arr:
-            writer.writerow(time_stamp)
+    time_out_file = out_dir + "timestamps-" + start_time_str + ".csv"
+    write_to_file(time_out_file, time_arr)
             
     print("authors parsed with count: " + str(authors_inserted_count))
 
@@ -179,7 +176,7 @@ def insert_links(conn, cursor, page_size, insert_vals):
 
 def insert_hashtags(conn, cursor, page_size, insert_vals):
     psycopg2.extras.execute_values(cursor, """
-            INSERT INTO hashtags(id,tag) VALUES %s;
+            INSERT INTO hashtags(id,tag) VALUES %s ON CONFLICT DO NOTHING;
         """, ((
             hasht[0],
             hasht[1],
@@ -251,6 +248,9 @@ def parse_conversations_first(conn, cursor):
     cont_entity_inserted_count = 0
     cont_entity_inserted_count_tmp = 0
 
+    new_authors_inserted_count = 0
+    new_authors_inserted_count_tmp = 0
+
     conv_insert_vals = []
     conv_ref_insert_vals = []
     anno_insert_vals = []
@@ -260,6 +260,8 @@ def parse_conversations_first(conn, cursor):
     cont_anno_insert_vals = []
     cont_domain_insert_vals = []
     cont_entity_insert_vals = []
+
+    new_authors_insert_vals = []
     
 
     conv_time_arr = []
@@ -299,6 +301,16 @@ def parse_conversations_first(conn, cursor):
                           data["public_metrics"]["like_count"],
                           data["public_metrics"]["quote_count"],
                           data["created_at"]))
+
+                #takes care of non existent authors
+                if authors_hashtable.get_val(data["author_id"]) == None:
+                    authors_hashtable.set_val(data["author_id"], data["author_id"])
+                    new_author_tuple = (data["author_id"], "", "", 0, 0, 0, 0)
+                    new_authors_insert_vals.append(new_author_tuple)
+                    new_authors_inserted_count +=1
+                    new_authors_inserted_count_tmp +=1
+
+                
                 #checks for entities inside the conversation
                 if "entities" in data:
                     #checks for annotations and iterates through them if there are multiple
@@ -311,7 +323,7 @@ def parse_conversations_first(conn, cursor):
                     #checks for links and iterates through them if there are multiple
                     if "urls" in data["entities"]:
                         for link in data["entities"]["urls"]:
-                            if len(link["url"]) > 2048:
+                            if len(link["expanded_url"]) > 2048:
                                 continue
                             link_inserted_count += 1
                             link_inserted_count_tmp += 1
@@ -323,7 +335,7 @@ def parse_conversations_first(conn, cursor):
                             if "description" in link:
                                 link_desc = link["description"].replace('\x00', '\uFFFD')
 
-                            link_tuple = (data["id"], link["url"], link_title, link_desc)
+                            link_tuple = (data["id"], link["expanded_url"], link_title, link_desc)
                             link_insert_vals.append(link_tuple)
                     
                     #checks for hashtags and iterates through them if there are multiple
@@ -332,8 +344,8 @@ def parse_conversations_first(conn, cursor):
                         for hasht in data["entities"]["hashtags"]:
                             #we use the hash of the tag as id
                             hashed_tag = hash(hasht["tag"])
-                            if hashtags_hashtable.get_val(hasht["tag"]) == None:
-                                hashtags_hashtable.set_val(hasht["tag"], hashed_tag)
+                            if hashtags_hashtable.get_val(hashed_tag) == None:
+                                hashtags_hashtable.set_val(hashed_tag, hashed_tag)
                                 hash_inserted_count += 1
                                 hash_inserted_count_tmp += 1
                                 hash_tuple = (hashed_tag, hasht["tag"])
@@ -422,20 +434,23 @@ def parse_conversations_first(conn, cursor):
                     insert_context_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_anno_insert_vals)
                     cont_anno_insert_vals = []
                 
-                if cont_domain_inserted_count_tmp >= 1000:
+                if cont_domain_inserted_count_tmp >= 10:
                     cont_domain_inserted_count_tmp = 0
-                    insert_context_domains(conn=conn, cursor=cursor, page_size=1000, insert_vals=cont_domain_insert_vals)
+                    insert_context_domains(conn=conn, cursor=cursor, page_size=10, insert_vals=cont_domain_insert_vals)
                     cont_domain_insert_vals = []
 
-                if cont_entity_inserted_count_tmp >= 1000:
+                if cont_entity_inserted_count_tmp >= 100:
                     cont_entity_inserted_count_tmp = 0
-                    insert_context_entities(conn=conn, cursor=cursor, page_size=1000, insert_vals=cont_entity_insert_vals)
+                    insert_context_entities(conn=conn, cursor=cursor, page_size=100, insert_vals=cont_entity_insert_vals)
                     cont_entity_insert_vals = []
                 if conv_ref_inserted_count_tmp >= BLOCKSIZE:
                     conv_ref_inserted_count_tmp = 0
                     insert_conversation_references(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_ref_insert_vals)
                     conv_ref_insert_vals = []
-                
+                if new_authors_inserted_count_tmp >= BLOCKSIZE:
+                    new_authors_inserted_count_tmp = 0
+                    insert_authors(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=new_authors_insert_vals)
+                    new_authors_insert_vals = []
                 
                 #every 500,000 conversations, the time arrays are written into their respective files, and their arrays are reset
                 #this is done to lower the number of times we write into files
@@ -457,7 +472,7 @@ def parse_conversations_first(conn, cursor):
         if anno_insert_vals != []:
             insert_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=anno_insert_vals)
         if link_insert_vals != []:
-            insert_conversations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=link_insert_vals)
+            insert_links(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=link_insert_vals)
         if hash_insert_vals != []:
             insert_hashtags(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=hash_insert_vals)
         if conv_hash_insert_vals != []:
@@ -470,6 +485,8 @@ def parse_conversations_first(conn, cursor):
             insert_context_entities(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_entity_insert_vals)
         if conv_ref_insert_vals != []:
             insert_conversation_references(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_ref_insert_vals)
+        if new_authors_insert_vals != []:
+            insert_authors(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=new_authors_insert_vals)
 
     #handles the remaining time stamp arrays
     if conv_time_arr != []:
@@ -486,18 +503,17 @@ def parse_conversations_first(conn, cursor):
     print("context_domains parsed with count: " + str(cont_domain_inserted_count))
     print("context_entities parsed with count: " + str(cont_entity_inserted_count))
     print("conversation_references parsed with count: " + str(conv_ref_inserted_count))
+    print("new_authors parsed with count: " + str(new_authors_inserted_count))
 
            
             
 
 #connecting to the database
 conn = psycopg2.connect(
-   database="pdt_tweets", user='postgres', password='heslo123', host='127.0.0.1', port= '5433'
+   database="pdt_tweets_2", user='postgres', password='heslo123', host='127.0.0.1', port= '5433'
 )
 cursor = conn.cursor()
 
-#parse_authors(conn, cursor)
+parse_authors(conn, cursor)
 
 parse_conversations_first(conn, cursor)
-
-
