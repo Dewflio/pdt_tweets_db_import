@@ -136,6 +136,36 @@ def insert_annotations(conn, cursor, page_size, insert_vals):
         ) for anno in insert_vals), page_size=page_size)
     conn.commit() 
 
+def insert_context_annotations(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO context_annotations(conversation_id, context_domain_id, context_entity_id) VALUES %s;
+        """, ((
+            anno[0],
+            anno[1],
+            anno[2],
+        ) for anno in insert_vals), page_size=page_size)
+    conn.commit() 
+
+def insert_context_domains(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO context_domains(id, name, description) VALUES %s;
+        """, ((
+            anno[0],
+            anno[1],
+            anno[2],
+        ) for anno in insert_vals), page_size=page_size)
+    conn.commit()
+
+def insert_context_entities(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO context_entities(id, name, description) VALUES %s;
+        """, ((
+            anno[0],
+            anno[1],
+            anno[2],
+        ) for anno in insert_vals), page_size=page_size)
+    conn.commit() 
+
 def insert_links(conn, cursor, page_size, insert_vals):
     psycopg2.extras.execute_values(cursor, """
             INSERT INTO links(conversation_id, url, title, description) VALUES %s;
@@ -150,6 +180,15 @@ def insert_links(conn, cursor, page_size, insert_vals):
 def insert_hashtags(conn, cursor, page_size, insert_vals):
     psycopg2.extras.execute_values(cursor, """
             INSERT INTO hashtags(id,tag) VALUES %s;
+        """, ((
+            hasht[0],
+            hasht[1],
+        ) for hasht in insert_vals), page_size=page_size)
+    conn.commit() 
+
+def insert_conv_hashtags(conn, cursor, page_size, insert_vals):
+    psycopg2.extras.execute_values(cursor, """
+            INSERT INTO conversation_hashtags(conversation_id, hashtag_id) VALUES %s;
         """, ((
             hasht[0],
             hasht[1],
@@ -192,11 +231,21 @@ def parse_conversations_first(conn, cursor):
     conv_hash_inserted_count = 0
     conv_hash_inserted_count_tmp = 0
 
+    cont_anno_inserted_count = 0
+    cont_anno_inserted_count_tmp = 0
+    cont_domain_inserted_count = 0
+    cont_domain_inserted_count_tmp = 0
+    cont_entity_inserted_count = 0
+    cont_entity_inserted_count_tmp = 0
+
     conv_insert_vals = []
     anno_insert_vals = []
     link_insert_vals = []
     hash_insert_vals = []
     conv_hash_insert_vals = []
+    cont_anno_insert_vals = []
+    cont_domain_insert_vals = []
+    cont_entity_insert_vals = []
 
     conv_time_arr = []
     conv_block_start = time.time()
@@ -280,7 +329,39 @@ def parse_conversations_first(conn, cursor):
                                 conv_hash_tuple = (data["id"], hashed_tag)
                                 conv_hash_insert_vals.append(conv_hash_tuple)
                                 unq_h.append(hashed_tag)
-                            
+
+                    #parses context_annotations
+                    if "context_annotations" in data:
+                         for context_annotation in data["context_annotations"]:
+                            if "domain" in context_annotation:
+                                d = context_annotation["domain"]
+                                if domains_hashtable.get_val(d["id"]) == None:
+                                    domains_hashtable.set_val(d["id"], d["id"])
+                                    desc_val = ""
+                                    if "description" in d:
+                                        desc_val = d["description"].replace('\x00', '\uFFFD')
+                                    cont_domain_tuple = (d["id"], d["name"].replace('\x00', '\uFFFD'), desc_val)
+                                    cont_domain_insert_vals.append(cont_domain_tuple)
+                                    cont_domain_inserted_count += 1
+                                    cont_domain_inserted_count_tmp += 1
+
+                            if "entity" in context_annotation:
+                                e = context_annotation["entity"]
+                                if entities_hashtable.get_val(e["id"]) == None:
+                                    entities_hashtable.set_val(e["id"], e["id"])
+                                    desc_val = ""
+                                    if "description" in e:
+                                        desc_val = e["description"].replace('\x00', '\uFFFD')
+                                    cont_entity_tuple = (e["id"], e["name"].replace('\x00', '\uFFFD'), desc_val)
+                                    cont_entity_insert_vals.append(cont_entity_tuple)
+                                    cont_entity_inserted_count += 1
+                                    cont_entity_inserted_count_tmp += 1
+                            if "domain" in context_annotation and "entity" in context_annotation:
+                                cont_anno_tuple = (data["id"], context_annotation["domain"]["id"], context_annotation["entity"]["id"])
+                                cont_anno_insert_vals.append(cont_anno_tuple)
+                                cont_anno_inserted_count +=1
+                                cont_anno_inserted_count_tmp +=1
+
   
 
                 #every BLOCK_SIZE number of entries in each category, the array of entries is inserted into their respective table
@@ -298,26 +379,38 @@ def parse_conversations_first(conn, cursor):
                 if hash_inserted_count_tmp >= BLOCKSIZE:
                     hash_inserted_count_tmp = 0
                     insert_hashtags(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=hash_insert_vals)
-                    #a,b,c = get_time(hash_block_start)
-                    #hash_time_arr.append((a,b,c))
                     hash_insert_vals = []
-                    #hash_block_start = time.time()
                 
                 if link_inserted_count_tmp >= BLOCKSIZE:
                     link_inserted_count_tmp = 0
                     insert_links(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=link_insert_vals)
-                    #a,b,c = get_time(link_block_start)
-                    #link_time_arr.append((a,b,c))
                     link_insert_vals = []
-                    #link_block_start = time.time()
                 
                 if anno_inserted_count_tmp >= BLOCKSIZE:
                     anno_inserted_count_tmp = 0
                     insert_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=anno_insert_vals)
-                    #a,b,c = get_time(anno_block_start)
-                    #anno_time_arr.append((a,b,c))
                     anno_insert_vals = []
-                    #anno_block_start = time.time()
+                
+                if conv_hash_inserted_count_tmp >= BLOCKSIZE:
+                    conv_hash_inserted_count_tmp = 0
+                    insert_conv_hashtags(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_hash_insert_vals)
+                    conv_hash_insert_vals = []
+
+                if cont_anno_inserted_count_tmp >= BLOCKSIZE:
+                    cont_anno_inserted_count_tmp = 0
+                    insert_context_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_anno_insert_vals)
+                    cont_anno_insert_vals = []
+                
+                if cont_domain_inserted_count_tmp >= 1000:
+                    cont_domain_inserted_count_tmp = 0
+                    insert_context_domains(conn=conn, cursor=cursor, page_size=1000, insert_vals=cont_domain_insert_vals)
+                    cont_domain_insert_vals = []
+
+                if cont_entity_inserted_count_tmp >= 1000:
+                    cont_entity_inserted_count_tmp = 0
+                    insert_context_entities(conn=conn, cursor=cursor, page_size=1000, insert_vals=cont_entity_insert_vals)
+                    cont_entity_insert_vals = []
+                
                 
                 #every 500,000 conversations, the time arrays are written into their respective files, and their arrays are reset
                 #this is done to lower the number of times we write into files
@@ -327,18 +420,6 @@ def parse_conversations_first(conn, cursor):
                         time_out_file = out_dir + "timestamps-" + start_time_str + ".csv"
                         write_to_file(time_out_file, conv_time_arr)
                         conv_time_arr = []
-                    #if anno_time_arr != []:
-                    #    time_out_file = out_dir + "annotations-" + start_time_str + ".csv"
-                    #    write_to_file(time_out_file, anno_time_arr)
-                    #    anno_time_arr = []
-                    #if hash_time_arr != []:
-                    #    time_out_file = out_dir + "hashtags-" + start_time_str + ".csv"
-                    #    write_to_file(time_out_file, hash_time_arr)
-                    #    hash_time_arr = []
-                    #if link_time_arr != []:
-                    #    time_out_file = out_dir + "links-" + start_time_str + ".csv"
-                    #    write_to_file(time_out_file, link_time_arr)
-                    #    link_time_arr
                     time_reset_counter = 0
                     print("times written into csvs")
 
@@ -350,36 +431,33 @@ def parse_conversations_first(conn, cursor):
             conv_time_arr.append((a,b,c))
         if anno_insert_vals != []:
             insert_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=anno_insert_vals)
-            #a,b,c = get_time(anno_block_start)
-            #anno_time_arr.append((a,b,c))
         if link_insert_vals != []:
             insert_conversations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=link_insert_vals)
-            #a,b,c = get_time(link_block_start)
-            #link_time_arr.append((a,b,c))
         if hash_insert_vals != []:
             insert_hashtags(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=hash_insert_vals)
-            #a,b,c = get_time(hash_block_start)
-            #hash_time_arr.append((a,b,c))
+        if conv_hash_insert_vals != []:
+            insert_conv_hashtags(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=conv_hash_insert_vals)
+        if cont_anno_insert_vals != []:
+            insert_context_annotations(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_anno_insert_vals)
+        if cont_domain_insert_vals != []:
+            insert_context_domains(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_domain_insert_vals)
+        if cont_entity_insert_vals != []:
+            insert_context_entities(conn=conn, cursor=cursor, page_size=BLOCKSIZE, insert_vals=cont_entity_insert_vals)
 
     #handles the remaining time stamp arrays
     if conv_time_arr != []:
         time_out_file = out_dir + "timestamps-" + start_time_str + ".csv"
         write_to_file(time_out_file, conv_time_arr)
-    #if anno_time_arr != []:
-    #    time_out_file = out_dir + "annotations-" + start_time_str + ".csv"
-    #    write_to_file(time_out_file, anno_time_arr)
-    #if hash_time_arr != []:
-    #    time_out_file = out_dir + "hashtags-" + start_time_str + ".csv"
-    #    write_to_file(time_out_file, hash_time_arr)
-    #if link_time_arr != []:
-    #    time_out_file = out_dir + "links-" + start_time_str + ".csv"
-    #    write_to_file(time_out_file, link_time_arr)
 
             
     print("conversations parsed with count: " + str(conv_inserted_count))
     print("annotations parsed with count: " + str(anno_inserted_count))
     print("hashtags parsed with count: " + str(hash_inserted_count))
+    print("conversation_hashtags parsed with count: " + str(conv_hash_inserted_count))
     print("links parsed with count: " + str(link_inserted_count))
+    print("context_annotations parsed with count: " + str(cont_anno_inserted_count))
+    print("context_domains parsed with count: " + str(cont_domain_inserted_count))
+    print("context_entities parsed with count: " + str(cont_entity_inserted_count))
 
            
             

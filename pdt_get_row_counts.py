@@ -49,7 +49,7 @@ print("context_domains:\t\t" + str(result[0]))
 sql = "SELECT COUNT(*) FROM context_entities"
 cursor.execute(sql)
 result = cursor.fetchone()
-print("contexts_entities:\t\t" + str(result[0]))
+print("context_entities:\t\t" + str(result[0]))
 
 sql = "SELECT COUNT(*) FROM conversation_references"
 cursor.execute(sql)

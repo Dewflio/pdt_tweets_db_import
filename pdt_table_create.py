@@ -16,8 +16,9 @@ sql_authors ='''CREATE TABLE IF NOT EXISTS authors(
    listed_count int4
 )'''
 
+#changed int8 to BIGSERIAL to autoincrement
 sql_conversation_hashtags ='''CREATE TABLE IF NOT EXISTS conversation_hashtags(
-   id int8 PRIMARY KEY,
+   id BIGSERIAL PRIMARY KEY,
    conversation_id int8 NOT NULL,
    hashtag_id int8 NOT NULL
 )'''
@@ -68,8 +69,9 @@ sql_hashtags ='''CREATE TABLE IF NOT EXISTS hashtags(
 )'''
 #tmp got rid of UNIQUE in column tag 
 
+#changed int8 to BIGSERIAL to autoincrement
 sql_context_annotations ='''CREATE TABLE IF NOT EXISTS context_annotations(
-   id int8 PRIMARY KEY,
+   id BIGSERIAL PRIMARY KEY,
    conversation_id int8 NOT NULL,
    context_domain_id int8 NOT NULL,
    context_entity_id int8 NOT NULL
