@@ -510,7 +510,7 @@ def parse_conversations_first(conn, cursor):
 
 #connecting to the database
 conn = psycopg2.connect(
-   database="pdt_tweets_2", user='postgres', password='heslo123', host='127.0.0.1', port= '5433'
+   database="pdt_tweets", user='postgres', password='heslo123', host='127.0.0.1', port= '5433'
 )
 cursor = conn.cursor()
 
